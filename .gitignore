@@ -6,7 +6,7 @@ set_test/
 set_train_p1/
 set_test_p1/
 
-
+spherical*.npy
 
 
 # PYTHON GITIGNORE
