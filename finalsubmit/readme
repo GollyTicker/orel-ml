@@ -18,13 +18,13 @@ ssahoo@student.ethz.ch
 aurbinat@student.ethz.ch
 
 Preprocessing
-sphericalcoordinates
+sphericalcoordinates,crop,splittrainvalidation
 
 Features
-divisioninto144blocks,histograms
+divisioninto144blocks,histograms,concatenate
 
 Model
-decisiontrees,randomforest,splitintotrainingandvalidationset
+decisiontrees,randomforest,regularizebyparamsandvalidationerror
 
 Description
 == TODO == TODO == TODO == TODO == TODO == TODO == TODO == TODO ==

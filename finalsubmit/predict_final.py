@@ -75,8 +75,8 @@ print "Dimensions: ",nHists*hSize
 def saveCSV(xs,filename):
   fname = filename + ".csv"
   f = open(fname,"wb")
-  wr = csv.writer(f,delimiter=",")
-  wr.writerow(["ID","PREDICTION"])
+  wr = csv.writer(f,delimiter=",",lineterminator="\n")
+  wr.writerow(["ID","Prediction"])
   wr.writerows( [ [i+1,pred] for i,pred in enumerate(xs) ] )
   f.close()
   return fname
