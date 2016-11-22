@@ -1,36 +1,91 @@
-# The authors' emails go into the first lines, one email per line.
-# Make sure you provide the .ethz.ch email.
-#
-# Now comes the key section with the three subsections "Preprocessing",
-# "Features" and "Model". Leave the headlines as they are and only
-# modify the keys. Try to provide at least three informative keys per
-# subsection and separate the keys with commas ",".
-#
-# Each key should be single word or concatenation of several words,
-# e.g. crop, histogram, mutualinformationscore, linearregression, etc.
-#
-# The final section is "Description" which includes a verbose summary
-# with no strict formatting but make sure it has a reasonable minimum
-# length.
-
 cbozzo@student.ethz.ch
 ssahoo@student.ethz.ch
 aurbinat@student.ethz.ch
 
 Preprocessing
-sphericalcoordinates,crop,splittrainvalidation
+sphericalcoordinates,crop,balancedsplittrainvalidation
 
 Features
-divisioninto144blocks,histograms,concatenate
+sphericalblocks,histograms,concatenate
 
 Model
-decisiontrees,randomforest,regularizebyparamsandvalidationerror
+randomforest,regression,regularization
 
 Description
-== TODO == TODO == TODO == TODO == TODO == TODO == TODO == TODO ==
-Verbose and detailed description of preprocessing, features, model and
-other things that are helpful to understand what was done exactly.
-E.g. if key1 = histogram for features, then the description might look
-like this: "We divide the image into 7x7x7 blocks and make a histogram
-with 10 bins for each of them. These histograms are then concatenated
-into a vector"
+PREPROCESSING
+
+  SPHERICAL COORDINATE AND CROPPING
+    For our final submission, we have transformed the 3D images into
+    a spherical coordinate system. we did this to make a better cropping
+    of the data. By going into a spherical system (using radius, theta and phi)
+    (see https://upload.wikimedia.org/wikipedia/commons/4/4f/3D_Spherical.svg)
+    and translating the original cartesian coordinates, we can then make
+    the center of the 3D images the origin in the spherical system.
+    By this, we saw, that all non-zero voxels are inside a sphere of radius 80.
+    We populated a 3D-array corresponding to the spherical coordinate system
+    by following ranges:
+    radius from 0 to 80 in steps of 2
+    theta from 30 to 150 in steps of 2 (we ignore the upper- and lowermost
+    data, since it contains few information)
+    phi from -180 to 180 in steps of 2
+    They are all transformed into the index-range and saved in an
+    array xSpherical of shape (416, 41, 76, 181).
+    416 is the total number of samples we have received.
+    For each element in this array we looked for its corresponding
+    voxel in the source image and copied the value. Examples
+    of a brain in spherical coordinate can be seen in the images
+    in "src/". Each of these images corresponds to a slice in theta-axis,
+    where the x-axis is phi and y-axis is the radius.
+    This preprocessing took ~1h and produces ~2GB of data
+    ("src/spherical_every2.npy"). Since it is so large and we don't
+    actually use it directly for the prediction, we didn't add it to the archive.
+    How the preprocessing was done is indicated by the commented-out code in
+    section PREPROCESSING.
+
+  SPLIT INTO TRAINING AND VALIDAITON SET
+    We learned from our mistakes of our previous project. We hadn't applied any
+    real validation techniques - we just used the public score to guide us.
+    (which lead us to overfitting).
+    This time we first split the public training set of 278 samples into
+    a training set (70%) and validation set (30%).
+    We recognized, that the naive splitting of the set often gives an unbalanced
+    number of healthy and sick people both of the sets. Thus, instead we
+    split the healthy and sick samples separately into 70%/30% and then
+    join together the training and validation sets. By this we get a similar
+    distribution of healthy and sick people in both sets.
+
+
+FEATURE SELECTION
+
+  SPHERICAL BLOCKS
+    For feature selection (see code PREPROCESSING) we divided the spherical coordinates
+    array into 6 ranges for the radius, 4 for theta and 6 for phi. We then get
+    6*4*6=144 onion-like volumes. We adapted the idea of subdividing the
+    3D image form last project and other teams - but used it on this transformed
+    space rather than on the original. The cropping is more natural this way.
+
+  HISTOGRAMS
+    For each of the 144 "blocks", we create a histogram with 69 buckets evenly
+    spaced from 1 to 1700. We ignore 0 for its high amount of non-information.
+    1700 is a good enough upper limit.
+
+  CONCATENATE
+    The 144 histograms corresponding to each of the "blocks" are concatenated.
+    This then gives the features we use for our model.
+
+
+MODEL
+
+  RANDOM FOREST, REGRESSION, REGULARIZATION
+    Even though we have a classification task, we use random forest regression
+    because it allows us to return values in [0,1] not limiting us to 0 or 1.
+    After slightly bad experiences of decision trees from previous project
+    we didn't consider them until just a few days ago. (Before we tried LassoRegression,
+    AdaBoosting, SVM, KenrelSVM, etc...) They seem to be very effective.
+    Even more effective (and stable) than our previous approaches. We impose serious
+    limitations on the decision trees (max_depth, sample size, percentage of view etc.)
+    to keep them from overfitting and generating different view of the data.
+    Random Forest does success in the task. We receive a prediction in [0,1]
+    for our data. Our validation score for our final submission is ~0.309,
+    which is close to its corresponding public score of ~0.305.
+

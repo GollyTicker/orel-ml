@@ -17,6 +17,7 @@ import csv
 
 
 """ =============== Constants and global variables ================== """
+print "[0] Init"
 
 n_max = 278
 n_test_max = 138
@@ -65,9 +66,9 @@ fname = "src/many_hists"+str(nHists)+"_space" + str(space) + ("_divs_%s_%s_%s.np
 fnameSpherical = "src/spherical_every2.npy"
 # xSpherical = np.load(fnameSpherical) #  not needed for actual prediction anymore. was part of preprocessing
 
-print "Number of Histograms:",nHists
-print "Size of Histograms:",hSize
-print "Dimensions: ",nHists*hSize
+print "  Number of Histograms:",nHists
+print "  Size of Histograms:",hSize
+print "  Dimensions: ",nHists*hSize
 
 
 """ =========== Misc. functions =============== """
@@ -147,14 +148,17 @@ def loadAndPreprocess():
     #np.save(fnameSpherical,xSpherical)
     #print "======= Saved spherical coordinates into %s =========" % fnameSpherical
 
-if False:
-  loadAndPreprocess()
-else:
-  xa = np.load(fname)
-  x,x_t = (xa[0:n_max,:],xa[n_max:,:])
+# no need since matrix is already precomputed
+# loadAndPreprocess()
 
+xa = np.load(fname)
+x,x_t = (xa[0:n_max,:],xa[n_max:,:])
 
-# In[5]:
+print "[1] Preprocessing, ok"
+print "[2] Feature selection, ok"
+
+""" ======================== SPLIT TRAINING AND VALIDATION ================== """
+print "[3] Splitting data into training and validation set"
 # xa. all data
 # x. public training data
 # y. public training targets
@@ -173,30 +177,29 @@ onestr,onests,_,_ = train_test_split(ones,ones*0,test_size=0.3,random_state=1)
 zerostr,zerosts,_,_ = train_test_split(zeros,zeros*0,test_size=0.3,random_state=1)
 
 # plot the data. a few random states have been tried to to make sure all splits are balanced enough.
-print "\nIndices for total data: "
-print "  healthy",len(ones),": ",ones[5:15],"..."
-print "  sick",len(zeros),": ",zeros[5:15],"...\n"
+print " \n Indices for total data: "
+print "    healthy",len(ones),": ",ones[5:15],"..."
+print "    sick",len(zeros),": ",zeros[5:15],"...\n"
 
-print "Indices for splitted data: "
-print "  healthy training ",len(onestr),": ",onestr[5:15],"..."
-print "  healthy test ",len(onests),": ",onests[5:15],"..."
-print "  sick training ",len(zerostr),": ",zerostr[5:15],"..."
-print "  sick test ",len(zerosts),": ",zerosts[5:15],"..."
+print "  Indices for splitted data: "
+print "    healthy training ",len(onestr),": ",onestr[5:15],"..."
+print "    healthy test ",len(onests),": ",onests[5:15],"..."
+print "    sick training ",len(zerostr),": ",zerostr[5:15],"..."
+print "    sick test ",len(zerosts),": ",zerosts[5:15],"..."
 
 xtr = np.vstack((x[onestr],x[zerostr]))
 xts = np.vstack((x[onests],x[zerosts]))
 ytr = np.hstack((y[onestr],y[zerostr]))
 yts = np.hstack((y[onests],y[zerosts]))
 
-print "\nSplitted data into test and validation data\n\n"
+print "\n  Splitted data into test and validation data\n"
 
-
-# In[6]:
+""" ===================== MODEL ============================= """
 
 def randomForest(n_est,f,msp,max_depth):
   global y_t_pred,yts_pred,result,y_t_pp
   prefix = "%s_RandomForest_n%s_feats%s_msp%s_max_depth%s"%(name,n_est,f,msp,max_depth)
-  print "================ Prediction ==================== \n\n  with %s\n  This will take a few seconds..." % prefix
+  print "[4] =========== Prediction =========\n  with %s\n  This will take a few seconds..." % prefix
   model = RandomForestRegressor(n_est,max_features=f,min_samples_split=msp,max_depth=max_depth,random_state=1)
   xtr1 = xtr[:,:] # use all data
   xts1 = xts[:,:] # use all data
@@ -210,20 +213,15 @@ def randomForest(n_est,f,msp,max_depth):
   ltr = log_loss(ytr,ytr_pp)
   lts = log_loss(yts,yts_pp)
   ltm = log_loss(yts,y_mean[:len(yts)])
-  print("\n")
-  print("============================    Log-Loss train           ltr = %.3f =========="%ltr)
-  print("============================    Log-Loss test            lts = %.3f =========="%lts)
-  print("============================    Log-Loss mean prediciton ltm = %.3f ==========\n\n"%ltm)
-  trCorrect = len(map(lambda x:x[0]-x[1],filter(lambda x:x[0]!=x[1],zip(ytr,ytr_pp))))
-  tsCorrect = len(map(lambda x:x[0]-x[1],filter(lambda x:x[0]!=x[1],zip(yts,yts_pp))))
-  print "Predictions training: %s correct / %s incorrect" %(trCorrect,len(xtr)-trCorrect)
-  print "Predictions validation: %s correct / %s incorrect" %(tsCorrect,len(xts)-tsCorrect)
-  print "Model Score: %s" % model.score(xts1,yts)
+  print("\n  ===============    Log-Loss train           ltr = %.3f   =========="%ltr)
+  print(  "  ===============    Log-Loss validation      lts = %.3f   =========="%lts)
+  print(  "  ===============    Log-Loss mean prediciton ltm = %.3f   ==========\n"%ltm)
+  print "  Model Score: %s" % model.score(xts1,yts)
   prefix = "%s_expected_score%.3f"%(prefix,lts)
   return prefix,model
 
 
-# In[20]:
+""" ============================== PREDICTION ============================= """
 
 def doStuff(n_est=400,f=0.15,msp=10,max_depth=3):
   global prefix,result
@@ -234,7 +232,7 @@ def doStuff(n_est=400,f=0.15,msp=10,max_depth=3):
   
   visualize(y,y_t_pp,prefix)
   
-  print "Variables available in 'result'"
+  print "  Variables available in 'result'"
   result = (x,y,x_t,y_t_pred,y_t_pp,model)
 
 def visualize(y,y_t_pp,prefix):
@@ -245,14 +243,19 @@ def visualize(y,y_t_pp,prefix):
   plt.title("PREDICTIONS sorted (0=unhealty, 1=healthy)")
   plt.plot(sorted(y_t_pp),"bo")
   plt.savefig(prefix + "_plot.png")
-  print("Saved age diagrams as %s"%(prefix+"*.png"))
+  print("  Saved age diagrams as %s"%(prefix+"*.png"))
 
 def savePrediction():
     saveCSV(map(cap,y_t_pp),prefix)
     savedFilename = saveCSV(map(cap,y_t_pp),finalSubOut)
-    print("Saved predictions into %s" % savedFilename)
+    print("  Saved predictions into %s" % savedFilename)
 
 
-# Make Prediction. These values were found by minimizing the validation error (on xts)
+# Make Prediction. These values were chosen by minimizing validation error (second Log-Loss statement in output)
+# n_est: number of decision trees
+# f: how much each of the trees gets to see (0.2 means 20%)
+# msp: minimal number of samples required to split a node in the decision tree
+# max_depth: maximum depth of the trees. after this no split are done.
 doStuff(n_est=400,f=0.2,msp=10,max_depth=2)
 
+print "[5] Finished."
