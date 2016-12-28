@@ -1,8 +1,6 @@
 
 # coding: utf-8
 
-# In[30]:
-
 import nibabel as nib
 import numpy as np
 from sklearn.svm import SVC
@@ -15,8 +13,7 @@ from itertools import groupby
 from sklearn.model_selection import train_test_split
 import csv
 
-
-# In[89]:
+# Constants and utilities
 
 n_max = 278
 n_test_max = 138
@@ -37,16 +34,36 @@ def saveCSV(y,filename):
   f.close()
   return fname
 
+def visualize(labelName,y_pred):
+  total = int(len(y_pred)*0.7)
+  zeros = int(len(filter(lambda x:x == 0,y_pred))*0.7)
+  print labelName," ","0"*zeros,"#","1"*(total-zeros),"***"
+
+def savePrediction(ys,prefix):
+    savedFilename = saveCSV(ys,prefix)
+    print("Saved predictions into %s" % savedFilename)
+
+# utilities to cap round values to 0 or 1
 prep_ = lambda i:cap(i)
 def prep(a):
   return np.array(map(prep_single,a))
+prep_single = lambda xs:map(prep_,xs)
+cap = lambda p: 0 if p < 0.5 else 1
 
 percent = lambda x:"%2.1f%%"%(x*100)
 
-prep_single = lambda xs:map(prep_,xs)
 
-cap = lambda p: 0 if p < 0.5 else 1
+# xa. all data
+# x. public training data
+# y. public training targets
+# x_t public to be predicted data
+result = None
+xa = 0
+x = None
+x_t = None
 
+
+# The target values parsed from targets.csv
 # gender: 1 = female, 0 = male
 # age: 1 = young, 0 = old
 # health: 1 = healthy, 0 = sick
@@ -58,20 +75,23 @@ y[:,0] = np.array(y_gender)
 y[:,1] = np.array(y_age)
 y[:,2] = np.array(y_health)
 
-result = None
-xa = 0
-x = None
-x_t = None
-space = 15 # 35,50,70,100,150
+# space: 1 + the number of bins in the histograms
+space = 15
 hSize = space-1
 bins = np.linspace(1,1700,space)
-sbins = bins[:-1]+1800/space/2
 
+# We divide the radius,theta and phi-axes each into 8 pieces.
+# Thus we then get 8 x 8 x 8 = 512 spherical-blocks around the brain center.
 r_division = 8
 theta_division = 8
 phi_division = 8
+
+# we only go upto radius = 80, since after that all voxels are black
+# We ignore the lower-most and upper-most 30° in theta, since
+# since they contain very few information
+# (as a consequence of the spherical coordinate-system). 
 # radius form 0 to 80
-# theta from 0 to 180
+# theta from 30s to 150
 # phi from 0 to 360
 rMax = 80
 tMin = 30
@@ -80,17 +100,31 @@ tMax = 180-tMin
 ranges = [1,r_division,theta_division,phi_division]
 nBlocks = r_division*theta_division*phi_division
 
+# This is the file, where the data is stored in
+# the spherical-coordinate system. Like in MLP2
+# we don't submit this, as it would be 16GB big.
+# we only submit the actual processed histograms
+# since only theyare needed for the prediction.
 fnameSpherical = "spherical_every2.npy"
 xSpherical = [] # np.load(fnameSpherical)
 
-bSize = hSize+2
-ds = nBlocks*bSize
+# we have 512 blocks. each block giving rise to 'bsize' many features.
+# Each block contains the histogram (hsize) and the voxel average and std-dev (+2).
+bSize = hSize+2 # = 16
+ds = nBlocks*bSize #  we have 8192 = 16 * 512 many features
 iHist = 0
 idxHist = lambda i: iHist+i*bSize
 idxsFor = lambda i,many: np.array(range(idxHist(i)+hSize,idxHist(i)+hSize+many))
 
 
-# In[90]:
+# ================== PREPROCESSING & FEATURE EXTRACTION ==================
+
+# This is the procedure, which was used to read the spherical-transformed data
+# and to create features out of them. Since the spherical-data is missing,
+# we only provide the code which did the transformation for illustrative purposes.
+# The print statements are commented and nothing is actually preprocesed here,
+# because offer the preprocessed .npy data directly.
+# For illustration, we copied the output, which happens during preprocessing into console.
 
 # print "Number of Blocks:",nBlocks
 # print "Size of Histograms:",hSize
@@ -98,7 +132,6 @@ idxsFor = lambda i,many: np.array(range(idxHist(i)+hSize,idxHist(i)+hSize+many))
 # print "Dimensions: ca.",ds
 
 fromto = lambda di,sph: zip(np.round(np.linspace(0,sph.shape[di],ranges[di]+1)),np.round(np.linspace(0,sph.shape[di],ranges[di]+1))[1:])
-
 fname = "src/histsSize%s_stats_nBlocks%s_bSize%s_divs_%s_%s_%s.npy" % (hSize,nBlocks,bSize,r_division,theta_division,phi_division)
 name = "%s" % fname[:-4]
 
@@ -107,10 +140,8 @@ def loadAndPreprocess():
     global d_org,x,x_t,xa,x_org,x_t_org,xa_org,xSpherical
     
     xa = np.zeros((n_max+n_test_max,ds))
-    #xSpherical = np.zeros((n_max+n_test_max,rMax/2+1,(tMax-tMin)/2+1,360/2+1))
     
     i = 0
-    #print "===== Calculate spherical coordiantes ===="
     iD = i
     diff = 1
     max_diff = 45
@@ -120,13 +151,6 @@ def loadAndPreprocess():
         diff = 2*diff
         iD = i
       
-      #n_i,pre,t_str = (n_max,"set_train/","train") if i < n_max else (n_test_max,"set_test/","test")
-      #filename = "%s%s_%s.nii" % (pre,t_str,i%n_max+1)
-      #Xtotal,Ytotal,Ztotal = (176,208,176)
-      #data = nib.load(filename).get_data().reshape((Xtotal,Ytotal,Ztotal))
-      #data = data[35:130,40:150,10:100]
-
-      # calculate histograms: 8*4*8 = 256 histograms
       hCount = 0
       i0=0
       for l,u in fromto(1,xSpherical):
@@ -152,10 +176,9 @@ def loadAndPreprocess():
     np.save(fname,xa)
     print "======= Saved data matrix xa into %s =========" % fname
     
-    #np.save(fnameSpherical,xSpherical)
-    #print "======= Saved spherical coordinates into %s =========" % fnameSpherical
 
-# switch to preprocess by setting True
+# switch to preprocess by setting True.
+# this won't wokr for submission, as the spherical-data is missing.
 if False:
   loadAndPreprocess()
 
@@ -188,13 +211,10 @@ Example: [   0.            0.           37.           28.          462.         
     1.            0.        ] ..."""
 
 
-
-# In[91]:
-
-# xa. all data
-# x. public training data
-# y. public training targets
-# x_t public to be predicted data
+# ============================== Balanced Splits ===================================
+# the following code is nesessary to make sure our manually-implemented
+# bagging does indeed split in such a way, that respects the relative
+# frequencies of occurrence for each of the 6 classes (as combinations of gender/age/health).
 
 b = [0,1]
 types = [ [a1,a2,a3] for a1 in b for a2 in b for a3 in b if not (a2 is 1 and a3 is 0)]
@@ -208,9 +228,7 @@ def get_by(t,ys):
 typeIdxs = np.array([get_by(t,y) for t in types])
 ratios = [float(len(i))/n_max for i in typeIdxs]
 
-# The procedure will add so many nonClass samples to the split, until at least 30% don't belong to any class
-# for None, this doSplit returns a tuple of elements.
-# for the other arguments, doSplit list of such tuples
+# this procedure does the balanced splitting
 def doSplit(test_size=0.25,rs=1,show=False):
   def mkTuple(ttr,tts,lastIsNil,classes):
     ys = lambda i: [classes[i] if i < 2 else -1]
@@ -233,22 +251,13 @@ def doSplit(test_size=0.25,rs=1,show=False):
   # health: 1 = healthy, 0 = sick
   return mkTuple(typeIdxsTR,typeIdxsTS,False,None)
 
-print "Class representation"
+print "Classes [gender,age,health] with their relative frequencies"
 r = map(lambda x:int(x*100),ratios)
 for i in range(0,6):
   print types[i],("%2.1f%%"%r[i]),(r[i]*"=")
 
 
-# In[92]:
-
-def visualize(labelName,y_pred):
-  total = int(len(y_pred)*0.7)
-  zeros = int(len(filter(lambda x:x == 0,y_pred))*0.7)
-  print labelName," ","0"*zeros,"#","1"*(total-zeros),"***"
-
-def savePrediction(ys,prefix):
-    savedFilename = saveCSV(ys,prefix)
-    print("Saved predictions into %s" % savedFilename)
+# ============================== MODELING & MODEL SELECTION ================
 
 def applyClassification(model,label,split=None):
   (_,_,xtr,xts,ytr,yts) = split
@@ -426,7 +435,7 @@ def doStuff(test_size,n_splits,trs,kernel,coef0,deg,C,rs):
 # In[88]:
 
 result = doStuff(
-  # One-vs-One with Kernel Support Vector Machines.
+  # Kernel Support Vector Machines with polynomial kernel
   # we are making three different models. each for gender, age and health
   kernel="poly",coef0=1,deg=2,C=5e0,rs=0,     # oooh! stable, 13% public
   test_size=0.2,n_splits=10,trs=1)
