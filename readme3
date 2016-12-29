@@ -1,0 +1,78 @@
+cbozzo@student.ethz.ch
+ssahoo@student.ethz.ch
+aurbinat@student.ethz.ch
+
+Preprocessing
+sphericalcoordinates,crop,balancedsplittrainvalidation
+
+Features
+sphericalblocks,histograms,avarages,standard deviations,concatenate
+
+Model
+svm,regularization,average
+
+Description
+PREPROCESSING
+
+  SPHERICAL COORDINATE AND CROPPING
+    For our final submission, we have transformed the 3D images into
+    a spherical coordinate system. we did this to make a better cropping
+    of the data. By going into a spherical system (using radius, theta and phi)
+    (see https://upload.wikimedia.org/wikipedia/commons/4/4f/3D_Spherical.svg)
+    and translating the original cartesian coordinates, we can then make
+    the center of the 3D images the origin in the spherical system.
+    By this, we saw, that all non-zero voxels are inside a sphere of radius 80.
+    We populated a 3D-array corresponding to the spherical coordinate system
+    by following ranges:
+    radius from 0 to 80 in steps of 2
+    theta from 30 to 150 in steps of 2 (we ignore the upper- and lowermost
+    data, since it contains few information)
+    phi from -180 to 180 in steps of 2
+    They are all transformed into the index-range and saved in an
+    array xSpherical of shape (416, 41, 76, 181).
+    416 is the total number of samples we have received.
+    For each element in this array we looked for its corresponding
+    voxel in the source image and copied the value. Examples
+    of a brain in spherical coordinate can be seen in the images
+    in "src/". Each of these images corresponds to a slice in theta-axis,
+    where the x-axis is phi and y-axis is the radius.
+    This preprocessing took ~1h and produces ~2GB of data
+    ("src/spherical_every2.npy"). Since it is so large and we don't
+    actually use it directly for the prediction, we didn't add it to the archive.
+    How the preprocessing was done is indicated by the commented-out code in
+    section PREPROCESSING.
+
+  SPLIT INTO TRAINING AND VALIDAITON SET
+    We use 10 different balanced train/validation splitting of the train data to avoid 
+    overfitting.
+
+
+FEATURE SELECTION
+
+  SPHERICAL BLOCKS
+    For feature selection (see code PREPROCESSING) we divided the spherical coordinates
+    array into 8 ranges for the radius, 8 for theta and 8 for phi. We then get
+    8*8*8=512 onion-like volumes. We adapted the idea of subdividing the
+    3D image form last project and other teams - but used it on this transformed
+    space rather than on the original. The cropping is more natural this way.  
+
+  HISTOGRAMS
+    For each of the 512 "blocks", we create a histogram with 15 buckets evenly
+    spaced from 1 to 1700. We ignore 0 for its high amount of non-information.
+    1700 is a good enough upper limit. We also compute the averages and the standard   	      
+    deviations of each bloks. 
+
+  CONCATENATE
+    The 512 histograms corresponding to each of the "blocks" with the corresponding 
+    average and standard deviation are concatenate.
+    This then gives the features we use for our model.
+
+
+MODEL
+
+  SVM,REGULARIZATION,AVERAGE
+    After making 10 balanced splitting of the train set for each of the subsets we apply 
+    the svm to classify separately the gender, the age and the health. We use the 
+    kernel ‘poly’ and the penalty parameter C equal to 5. After taking the average among       
+    the ten different result the public score is of 0.1159.  
+
