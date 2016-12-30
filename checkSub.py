@@ -9,7 +9,7 @@ import os
 import zipfile
 from shutil import rmtree
 
-PROJECT = 'MLP2'
+PROJECT = 'MLP3'
 FINAL_SUB_LENGTH = 139
 MIN_DESCRIPTION_LENGTH = 50
 ERROR = 0
@@ -38,6 +38,8 @@ if not os.path.exists(sub):
 
 if len(sub.split("/")) > 1:
 	sub = sub.split("/")[-1]
+elif len(sub.split("\\")) > 1:
+	sub = sub.split("\\")[-1]
 
 if sub.split(".")[-1] != "zip":
 	print( "FATAL ERROR: Invalid archive type. Archive needs to be .zip")
@@ -45,11 +47,11 @@ if sub.split(".")[-1] != "zip":
 	sys.exit(-1)
 
 if len(sub.split("_")) == 1:
-	print( "ERROR: Invalid archive name. Archive name needs to be '"+PROJECT+"_teamname.zip'")
+	print( "ERROR: Invalid archive name. Archive name needs to be '"+PROJECT+"_teamname.zip'. Replace 'teamname' with the name of your team.")
 	ERROR += 1
 
 if sub.split("_")[0] != PROJECT:
-	print( "ERROR: Invalid archive name. Archive name needs to be '"+PROJECT+"_teamname.zip'")
+	print( "ERROR: Invalid archive name. Archive name needs to be '"+PROJECT+"_teamname.zip'. Replace 'teamname' with the name of your team.")
 	ERROR += 1
 
 # Check archive structure and content
@@ -65,6 +67,11 @@ if len(subfiles) != 4:
 	if len(subfiles) == 1 and os.path.isdir(subfiles[0]):
 		print( "ERROR: Invalid archive structure. Don't put the submission items in an extra folder before zipping.")
 		ERROR += 1
+	if subfiles[0] == "__MACOSX":
+		print( "ERROR: Invalid archive structure. There must not be a '__MACOSX' folder (use -X option for zip)")
+		ERROR += 1
+	rmtree("tmp")
+	sys.exit(-1)
 
 found = {'readme' : 0, 'src' : 0, 'predict_final' : 0, 'final_sub.csv' : 0}
 
@@ -98,15 +105,15 @@ if found['src'] == 1:
 
 # Check final_sub.csv
 if found['final_sub.csv'] == 1:
-	#finalSub = np.loadtxt("tmp/final_sub.csv",dtype=str,delimiter=",")
+
 	lines = open("tmp/final_sub.csv")
 
 	finalSub = []
 	for line in lines:
 		finalSub.append(line)
 
-	if finalSub[0] != "ID,Prediction\n":
-		print( "ERROR: Invalid first row in final.csv, first row must be 'ID,Prediction'")
+	if not ("ID" in finalSub[0] or "Prediction" in finalSub[0]):
+		print( "ERROR: Invalid first row in final_sub.csv, first row must be 'ID,Prediction'")
 		ERROR += 1
 
 	if len(finalSub) != FINAL_SUB_LENGTH:
@@ -136,30 +143,30 @@ if found['readme'] == 1:
 
 	validEmailCount = 0
 	for line in lines:
-		if len(line.split("@")) > 2:
-			print( "ERROR: More than one email per line in readme, put each email in a separate line")
-			ERROR += 1
-		elif line.find("@") != -1:
-			if "ethz" in line:
+		if "@" in line:
+			if len(line.split("@")) > 2:
+				print( "ERROR: More than one email per line in readme, put each email in a separate line")
+				ERROR += 1
+			elif "ethz" in line or "uzh" in line:
 				validEmailCount += 1
 			else:
-				print( "ERROR: Invalid email in readme, provide .ethz.ch mail address, each in a separate line")
+				print( "ERROR: Invalid email in readme, provide .ethz.ch or .uzh.ch mail address")
 				ERROR += 1
 
 	if validEmailCount == 0:
-		print( "ERROR: No valid author email in readme, insert author .ethz.ch emails in separate lines")
+		print( "ERROR: No valid author email in readme, insert author .ethz.ch or .uzh.ch emails in separate lines")
 		ERROR += 1
 
 	foundSection = {"Preprocessing" : 0, "Features" : 0, "Model" : 0, "Description" : 0}
 	n=1
 	for line in lines:
-		if line[:-1] == "Preprocessing":
+		if "Preprocessing" in line:
 			foundSection["Preprocessing"] = n
-		if line[:-1] == "Features":
+		elif "Features" in line:
 			foundSection["Features"] = n
-		if line[:-1] == "Model":
+		elif "Model" in line:
 			foundSection["Model"] = n
-		if line[:-1] == "Description":
+		elif "Description" in line:
 			foundSection["Description"] = n
 		n+=1
 

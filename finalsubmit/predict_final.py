@@ -102,7 +102,7 @@ nBlocks = r_division*theta_division*phi_division
 
 # This is the file, where the data is stored in
 # the spherical-coordinate system. Like in MLP2
-# we don't submit this, as it would be 16GB big.
+# we don't submit this, as it would be 2GB big.
 # we only submit the actual processed histograms
 # since only theyare needed for the prediction.
 fnameSpherical = "spherical_every2.npy"
@@ -259,15 +259,18 @@ for i in range(0,6):
 
 # ============================== MODELING & MODEL SELECTION ================
 
+# procedure to train a model for a binary classification.
+# split contains the training and validation data for the current split.
 def applyClassification(model,label,split=None):
   (_,_,xtr,xts,ytr,yts) = split
   get_label = lambda ys: ys[:,label]
   
   # processing line
   xtr1 = np.array(xtr,copy=True)
-  xtrAvg = np.average(xtr,axis=0)
+  xtrAvg = np.average(xtr,axis=0) # 1. normalize to 0 average and 1 std-dev.
   xtrStdDev = np.std(xtr,axis=0)
-  xtr1 = (xtr1 - xtrAvg)/(xtrStdDev+0.00001)
+  xtr1 = (xtr1 - xtrAvg)/(xtrStdDev+0.00001)    # avoid zero division
+  # fit the model to the training set and predict
   ytr_pred = model.fit(xtr1,get_label(ytr)).predict(xtr1)
   
   def predict(xData):
@@ -276,17 +279,15 @@ def applyClassification(model,label,split=None):
     yPred = model.predict(xData2)
     return yPred
   
-  yts_pred = predict(xts)
+  yts_pred = predict(xts) # predict validation set and public test data
   y_t_pred = predict(x_t)
   
-  #y_t_pp = prep_single(y_t_pred)
-  yts_pp = prep_single(yts_pred)
-  ytr_pp = prep_single(ytr_pred)
-
-  trCorrect = len(filter(lambda x:x,map(lambda x,y:x==y,get_label(ytr),ytr_pp)))
-  tsCorrect = len(filter(lambda x:x,map(lambda x,y:x==y,get_label(yts),yts_pp)))
-  ltr = 100*hamming_loss(get_label(ytr),ytr_pp)
-  lts = 100*hamming_loss(get_label(yts),yts_pp)
+  # we compute the training and validation hamming loss and print them.
+  # we also print the number of (in-)correctly classified samples.
+  trCorrect = len(filter(lambda x:x,map(lambda x,y:x==y,get_label(ytr),ytr_pred)))
+  tsCorrect = len(filter(lambda x:x,map(lambda x,y:x==y,get_label(yts),yts_pred)))
+  ltr = 100*hamming_loss(get_label(ytr),ytr_pred)
+  lts = 100*hamming_loss(get_label(yts),yts_pred)
 
   print "|   %3d    /    %3d    |   %3d   /     %3d    |    %3.1f%%     |     %3.1f%%     |" % (trCorrect,len(xtr)-trCorrect,tsCorrect,len(xts)-tsCorrect,ltr,lts)
     
@@ -294,6 +295,12 @@ def applyClassification(model,label,split=None):
 
 import random
 
+# the classification occurs by makening n_splits=10 many diferent spltis 
+# of the data into training and validation (aka bagging) and then
+# training 3*n_splits many classifiers on them.
+# For each split, we train three classifiers - each corresponding to
+# gender, age and health.
+# The final submission is created by majority vote over each of the sub classifiers.
 def applyClassificationSeparated(classf,trs,test_size,n_splits):
   prefix = classf[0]
   
@@ -308,19 +315,21 @@ def applyClassificationSeparated(classf,trs,test_size,n_splits):
   print "| Predictions training | Predictions test     | Hamming Loss | Hamming Loss |"
   print "|  correct / incorrect | correct / incorrect  |   Training   |    Test      |"
   
+  # for each split
   for i,split in enumerate(splits):
     print "============== SPLIT # %s # ================" % i
     
-    subClassResults = []
+    # train three calssifiers. eac for gender, age and health
     _,_,_,_,ytr,yts = split
     model1,ltr1,lts1,ytr_pred1,yts_pred1,y_t_pred1,prdt1 = applyClassification(classf[1],0,split=split)
     model2,ltr2,lts2,ytr_pred2,yts_pred2,y_t_pred2,prdt2 = applyClassification(classf[1],1,split=split)
     model3,ltr3,lts3,ytr_pred3,yts_pred3,y_t_pred3,prdt3 = applyClassification(classf[1],2,split=split)
 
-    ytr_pred_real = np.array([ytr_pred1,ytr_pred2,ytr_pred3]).transpose()
-    yts_pred_real = np.array([yts_pred1,yts_pred2,yts_pred3]).transpose()
-    y_t_pred_real = np.array([y_t_pred1,y_t_pred2,y_t_pred3]).transpose()
-
+    # combine the predictions
+    ytr_pred = np.array([ytr_pred1,ytr_pred2,ytr_pred3]).transpose()
+    yts_pred = np.array([yts_pred1,yts_pred2,yts_pred3]).transpose()
+    y_t_pred = np.array([y_t_pred1,y_t_pred2,y_t_pred3]).transpose()
+    
     def predictor(xData):
       lb1 = prdt1(xData)
       lb2 = prdt2(xData)
@@ -329,17 +338,14 @@ def applyClassificationSeparated(classf,trs,test_size,n_splits):
       return ys
 
     models = [model1,model2,model3]
-
-    y_pred_T = prep(y_t_pred_real)
-    y_pred_tr = prep(ytr_pred_real)
-    y_pred_ts = prep(yts_pred_real)
-    y_t_pred = y_pred_T
-    ltr = 100*hamming_loss(ytr,y_pred_tr)
-    lts = 100*hamming_loss(yts,y_pred_ts)
+    
+    # compute combined hamming loss
+    ltr = 100*hamming_loss(ytr,ytr_pred)
+    lts = 100*hamming_loss(yts,yts_pred)
     
     print "|                     Total                   |    %3.1f%%     | >>  %3.1f%%  << |" % (ltr,lts)
 
-    results.append([y_t_pred,[ytr_pred_real,yts_pred_real,y_t_pred_real],y_pred_ts,ltr,lts,models,predictor])
+    results.append([0,[ytr_pred,yts_pred,y_t_pred],0,ltr,lts,models,predictor])
     
   return results
 
@@ -358,18 +364,23 @@ def doStuff(test_size,n_splits,trs,kernel,coef0,deg,C,rs):
     
   prefix = "%s_TEST_SIZE%s_n%s_trs%s" % (prefix,test_size,n_splits,trs)
   
-  # results = [(y_pred_T,[ytr_pred_real,yts_pred_real,y_t_pred_real],y_pred_ts,ltr,lts,models),...]
   results = applyClassificationSeparated((prefix,model),test_size=test_size,trs=trs,n_splits=n_splits)
-  # compute average predictions:
+  
+  # compute the average prediction from the 10 splits (bagging)
   yt_real = np.average([r[1][2] for r in results],axis=0)
   
+  
+  # compuate average hamming losses and teir std-dev
   ltravg = np.average([r[3] for r in results],axis=0)
   ltsavg = np.average([r[4] for r in results],axis=0)
   ltrstd = np.std([r[3] for r in results],axis=0)*n_splits/(n_splits-1) # empirical std, estimation
   ltsstd = np.std([r[4] for r in results],axis=0)*n_splits/(n_splits-1)
   
+  # round average predictions to 0 and 1
   y_pred_T = prep(yt_real)
-
+  
+  
+  # visualize and save predictions
   print "\n### ltr %2.1f%% (+/- %2.2f) | ===== lts %2.1f%% (+/- %2.2f) ==== ###\n" % (ltravg,ltrstd,ltsavg,ltsstd)
   
   prefix = "%s_ltsavg%.3f_ltsstd%.3f"%(prefix,ltsavg/100,ltsstd/100)
@@ -432,16 +443,14 @@ def doStuff(test_size,n_splits,trs,kernel,coef0,deg,C,rs):
   return result
 
 
-# In[88]:
+# make the actual prediction
 
 result = doStuff(
   # Kernel Support Vector Machines with polynomial kernel
   # we are making three different models. each for gender, age and health
-  kernel="poly",coef0=1,deg=2,C=5e0,rs=0,     # oooh! stable, 13% public
+  kernel="poly",coef0=1,deg=2,C=5e0,rs=0,
   test_size=0.2,n_splits=10,trs=1)
 
-
-# In[ ]:
 
 
 

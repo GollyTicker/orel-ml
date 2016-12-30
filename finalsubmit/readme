@@ -6,10 +6,10 @@ Preprocessing
 sphericalcoordinates,crop,balancedsplittrainvalidation
 
 Features
-sphericalblocks,histograms,concatenate
+sphericalblocks,histograms,averages,standarddeviations,concatenate
 
 Model
-randomforest,regression,regularization
+svm,regularization,bagging
 
 Description
 PREPROCESSING
@@ -39,53 +39,43 @@ PREPROCESSING
     This preprocessing took ~1h and produces ~2GB of data
     ("src/spherical_every2.npy"). Since it is so large and we don't
     actually use it directly for the prediction, we didn't add it to the archive.
-    How the preprocessing was done is indicated by the commented-out code in
-    section PREPROCESSING.
+    Details of the preprocessing are same as in MLP2 and are therefore not
+    repreated in code this time.
 
   SPLIT INTO TRAINING AND VALIDAITON SET
-    We learned from our mistakes of our previous project. We hadn't applied any
-    real validation techniques - we just used the public score to guide us.
-    (which lead us to overfitting).
-    This time we first split the public training set of 278 samples into
-    a training set (70%) and validation set (30%).
-    We recognized, that the naive splitting of the set often gives an unbalanced
-    number of healthy and sick people both of the sets. Thus, instead we
-    split the healthy and sick samples separately into 70%/30% and then
-    join together the training and validation sets. By this we get a similar
-    distribution of healthy and sick people in both sets.
+    We use 10 different balanced train/validation splitting of the train data to avoid 
+    overfitting. This is like bagging, except that we make sure the splits
+    are random under the constraint that each of the 6 classes (combinations of gender/age/health
+    without young and sick samples) are represented in same ratios in the
+    sets as they aare in the data given.
 
 
 FEATURE SELECTION
 
   SPHERICAL BLOCKS
     For feature selection (see code PREPROCESSING) we divided the spherical coordinates
-    array into 6 ranges for the radius, 4 for theta and 6 for phi. We then get
-    6*4*6=144 onion-like volumes. We adapted the idea of subdividing the
+    array into 8 ranges for the radius, 8 for theta and 8 for phi. We then get
+    8*8*8=512 onion-like volumes. We adapted the idea of subdividing the
     3D image form last project and other teams - but used it on this transformed
-    space rather than on the original. The cropping is more natural this way.
+    space rather than on the original. The cropping is more natural this way.  
 
   HISTOGRAMS
-    For each of the 144 "blocks", we create a histogram with 69 buckets evenly
+    For each of the 512 "blocks", we create a histogram with 14 buckets evenly
     spaced from 1 to 1700. We ignore 0 for its high amount of non-information.
-    1700 is a good enough upper limit.
+    1700 is a good enough upper limit. We also compute the averages and the standard   	      
+    deviations of each bloks. 
 
   CONCATENATE
-    The 144 histograms corresponding to each of the "blocks" are concatenated.
-    This then gives the features we use for our model.
+    The 512 histograms corresponding to each of the "blocks" with the corresponding 
+    average and standard deviation are concatenated.
+    This then gives the 8192 features per sample we use for our model.
 
 
 MODEL
 
-  RANDOM FOREST, REGRESSION, REGULARIZATION
-    Even though we have a classification task, we use random forest regression
-    because it allows us to return values in [0,1] not limiting us to 0 or 1.
-    After slightly bad experiences of decision trees from previous project
-    we didn't consider them until just a few days ago. (Before we tried LassoRegression,
-    AdaBoosting, SVM, KenrelSVM, etc...) They seem to be very effective.
-    Even more effective (and stable) than our previous approaches. We impose serious
-    limitations on the decision trees (max_depth, sample size, percentage of view etc.)
-    to keep them from overfitting and generating different view of the data.
-    Random Forest does success in the task. We receive a prediction in [0,1]
-    for our data. Our validation score for our final submission is ~0.309,
-    which is close to its corresponding public score of ~0.305.
+  SVM,REGULARIZATION,BAGGING
+    After making 10 balanced splitting of the train set for each of the subsets we apply 
+    the svm to classify separately the gender, the age and the health. We use the 
+    kernel ‘poly’ and the penalty parameter C equal to 5. After taking the average among       
+    the ten different result the public score is of 0.1159.
 
